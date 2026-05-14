@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/useAuth'
 import { db, isFirebaseConfigured } from '../../firebase/config'
-import { createPerson, listPeople } from '../../services/peopleApi'
+import { createPerson, deletePersonAndEntries, listPeople } from '../../services/peopleApi'
 
 function PeopleList() {
   const { user } = useAuth()
@@ -13,6 +13,7 @@ function PeopleList() {
   const [people, setPeople] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
@@ -63,7 +64,9 @@ function PeopleList() {
       setMobile('')
       await load()
     } catch (err) {
-      if (err?.code === 'permission-denied') {
+      if (err?.code === 'duplicate-mobile') {
+        setError('This mobile number is already saved for another person. Use a different number or delete the existing person first.')
+      } else if (err?.code === 'permission-denied') {
         setError(
           'Missing or insufficient permissions — your Firestore rules are not allowing this yet. In Firebase Console → Firestore → Rules, paste the contents of firestore.rules from this project and click Publish. Tip: run npm run deploy:firestore in a terminal here to print those rules.',
         )
@@ -72,6 +75,30 @@ function PeopleList() {
       }
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleDelete(person) {
+    const ok = window.confirm(
+      `Remove ${person.name} and all money records for this person? This cannot be undone.`,
+    )
+    if (!ok || !user?.uid) return
+
+    setError('')
+    setDeletingId(person.id)
+    try {
+      await deletePersonAndEntries(person.id, user.uid)
+      await load()
+    } catch (err) {
+      if (err?.code === 'permission-denied') {
+        setError(
+          'Could not delete — check Firestore rules allow delete for documents you own.',
+        )
+      } else {
+        setError(err?.message || 'Could not delete this person.')
+      }
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -122,6 +149,9 @@ function PeopleList() {
               inputMode="tel"
               autoComplete="tel"
             />
+            <p className="mt-1 text-xs text-slate-500">
+              The same mobile cannot be added twice (spaces, +91, and formatting are ignored when checking).
+            </p>
           </div>
           <button
             type="submit"
@@ -149,17 +179,27 @@ function PeopleList() {
         ) : (
           <ul className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white shadow-sm">
             {people.map((p) => (
-              <li key={p.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <li key={p.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-medium text-slate-900">{p.name}</p>
                   <p className="text-sm text-slate-600">{p.mobile}</p>
                 </div>
-                <Link
-                  to={`/people/${p.id}`}
-                  className="inline-flex shrink-0 rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-sm font-medium text-teal-800 hover:bg-teal-100"
-                >
-                  Open their record
-                </Link>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    to={`/people/${p.id}`}
+                    className="inline-flex shrink-0 rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-sm font-medium text-teal-800 hover:bg-teal-100"
+                  >
+                    Open their record
+                  </Link>
+                  <button
+                    type="button"
+                    disabled={deletingId === p.id}
+                    onClick={() => handleDelete(p)}
+                    className="inline-flex shrink-0 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {deletingId === p.id ? 'Removing…' : 'Delete person'}
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
