@@ -1,0 +1,24 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /people/{personId} {
+      allow read: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+      // Do not use keys().hasAll(...) with serverTimestamp() — it can reject valid creates in the console.
+      allow create: if request.auth != null
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.mobile is string;
+      allow update, delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+
+      match /entries/{entryId} {
+        function personOwnedByUser() {
+          return get(/databases/$(database)/documents/people/$(personId)).data.ownerUid == request.auth.uid;
+        }
+
+        allow read: if request.auth != null && personOwnedByUser();
+        allow create: if request.auth != null && personOwnedByUser();
+        allow update, delete: if request.auth != null && personOwnedByUser();
+      }
+    }
+  }
+}
