@@ -4,7 +4,12 @@ import { useAuth } from '../../context/useAuth'
 import { db, isFirebaseConfigured } from '../../firebase/config'
 import { formatDateTime, formatMoney } from '../../lib/formatDisplay'
 import { computeEntryTotalDue } from '../../lib/loanMath'
-import { createEntry, getPersonIfOwner, listEntries, recordEntryPayment } from '../../services/peopleApi'
+import {
+  createBorrowedEntry,
+  getBorrowedLenderIfOwner,
+  listBorrowedEntries,
+  recordBorrowedRepayment,
+} from '../../services/borrowedApi'
 
 function toDateTimeLocalValue(date) {
   const d = date instanceof Date ? date : new Date(date)
@@ -12,18 +17,18 @@ function toDateTimeLocalValue(date) {
   return new Date(d.getTime() - offsetMs).toISOString().slice(0, 16)
 }
 
-function PersonDetail() {
-  const { personId } = useParams()
+function BorrowedDetail() {
+  const { lenderId } = useParams()
   const { user } = useAuth()
   const ready = isFirebaseConfigured() && !!db
 
-  const [person, setPerson] = useState(null)
+  const [lender, setLender] = useState(null)
   const [notAllowed, setNotAllowed] = useState(false)
   const [entries, setEntries] = useState([])
   const [pageLoading, setPageLoading] = useState(true)
   const [entriesLoading, setEntriesLoading] = useState(true)
 
-  const [givenAtLocal, setGivenAtLocal] = useState(() => toDateTimeLocalValue(new Date()))
+  const [takenAtLocal, setTakenAtLocal] = useState(() => toDateTimeLocalValue(new Date()))
   const [amount, setAmount] = useState('')
   const [withInterest, setWithInterest] = useState(false)
   const [interestPercent, setInterestPercent] = useState('')
@@ -38,17 +43,17 @@ function PersonDetail() {
   const [paymentError, setPaymentError] = useState('')
 
   useEffect(() => {
-    setPerson(null)
+    setLender(null)
     setEntries([])
     setNotAllowed(false)
     setPageLoading(true)
     setError('')
-    setGivenAtLocal(toDateTimeLocalValue(new Date()))
-  }, [personId])
+    setTakenAtLocal(toDateTimeLocalValue(new Date()))
+  }, [lenderId])
 
-  const loadPerson = useCallback(async () => {
-    if (!ready || !user?.uid || !personId) {
-      setPerson(null)
+  const loadLender = useCallback(async () => {
+    if (!ready || !user?.uid || !lenderId) {
+      setLender(null)
       setNotAllowed(false)
       setPageLoading(false)
       return
@@ -56,74 +61,74 @@ function PersonDetail() {
     setPageLoading(true)
     setNotAllowed(false)
     try {
-      const p = await getPersonIfOwner(personId, user.uid)
+      const p = await getBorrowedLenderIfOwner(lenderId, user.uid)
       if (!p) {
-        setPerson(null)
+        setLender(null)
         setNotAllowed(true)
       } else {
-        setPerson(p)
+        setLender(p)
       }
     } catch {
-      setPerson(null)
+      setLender(null)
       setNotAllowed(true)
     } finally {
       setPageLoading(false)
     }
-  }, [ready, user?.uid, personId])
+  }, [ready, user?.uid, lenderId])
 
   const loadEntries = useCallback(async () => {
-    if (!personId || !person || person.id !== personId) {
+    if (!lenderId || !lender || lender.id !== lenderId) {
       setEntries([])
       setEntriesLoading(false)
       return
     }
     setEntriesLoading(true)
     try {
-      const rows = await listEntries(personId)
+      const rows = await listBorrowedEntries(lenderId)
       setEntries(rows)
     } catch {
       setEntries([])
     } finally {
       setEntriesLoading(false)
     }
-  }, [personId, person])
+  }, [lenderId, lender])
 
   useEffect(() => {
-    loadPerson()
-  }, [loadPerson])
+    loadLender()
+  }, [loadLender])
 
   useEffect(() => {
-    if (person) loadEntries()
-  }, [person, loadEntries])
+    if (lender) loadEntries()
+  }, [lender, loadEntries])
 
-  const canUseForm = useMemo(() => ready && !!person && !notAllowed, [ready, person, notAllowed])
+  const canUseForm = useMemo(() => ready && !!lender && !notAllowed, [ready, lender, notAllowed])
 
-  const totalOutstanding = useMemo(() => {
+  const totalOwedHere = useMemo(() => {
     return entries.reduce((sum, row) => sum + Math.max(0, Number(row.balance) || 0), 0)
   }, [entries])
 
-  function openPaymentModal(row) {
+  function openRepayModal(row) {
     setPaymentError('')
     setPaymentEntry(row)
     setPaymentAmount('')
     setPaymentPaidAtLocal(toDateTimeLocalValue(new Date()))
   }
 
-  function closePaymentModal() {
+  function closeRepayModal() {
     setPaymentEntry(null)
     setPaymentError('')
     setPaymentAmount('')
   }
 
-  function cancelPaymentModal() {
+  function cancelRepayModal() {
     if (paymentSaving) return
-    closePaymentModal()
+    closeRepayModal()
   }
 
-  async function handleSubmitPayment(e) {
+  async function handleSubmitRepayment(e) {
     e.preventDefault()
     setPaymentError('')
-    if (!paymentEntry || !personId) return
+    if (!paymentEntry || !lenderId) return
 
     const amt = Number.parseFloat(String(paymentAmount).replace(/,/g, ''))
     if (!Number.isFinite(amt) || amt <= 0) {
@@ -133,17 +138,17 @@ function PersonDetail() {
 
     const paidDate = new Date(paymentPaidAtLocal)
     if (Number.isNaN(paidDate.getTime())) {
-      setPaymentError('Pick a valid date and time for this payment.')
+      setPaymentError('Pick a valid date and time.')
       return
     }
 
     setPaymentSaving(true)
     try {
-      await recordEntryPayment(personId, paymentEntry.id, { amount: amt, paidAt: paidDate })
-      closePaymentModal()
+      await recordBorrowedRepayment(lenderId, paymentEntry.id, { amount: amt, paidAt: paidDate })
+      closeRepayModal()
       await loadEntries()
     } catch (err) {
-      setPaymentError(err?.message || 'Could not save this payment.')
+      setPaymentError(err?.message || 'Could not save this repayment.')
     } finally {
       setPaymentSaving(false)
     }
@@ -152,7 +157,7 @@ function PersonDetail() {
   async function handleAddEntry(e) {
     e.preventDefault()
     setError('')
-    if (!canUseForm || !personId) return
+    if (!canUseForm || !lenderId) return
 
     const amt = Number.parseFloat(String(amount).replace(/,/g, ''))
     if (!Number.isFinite(amt) || amt <= 0) {
@@ -160,8 +165,8 @@ function PersonDetail() {
       return
     }
 
-    const givenDate = new Date(givenAtLocal)
-    if (Number.isNaN(givenDate.getTime())) {
+    const takenDate = new Date(takenAtLocal)
+    if (Number.isNaN(takenDate.getTime())) {
       setError('Pick a valid date and time.')
       return
     }
@@ -183,9 +188,9 @@ function PersonDetail() {
 
     setSaving(true)
     try {
-      await createEntry(personId, {
+      await createBorrowedEntry(lenderId, {
         amount: amt,
-        givenAt: givenDate,
+        givenAt: takenDate,
         withInterest,
         interestPercent: withInterest ? ip : null,
         interestAmount: withInterest ? ia : null,
@@ -194,7 +199,7 @@ function PersonDetail() {
       setWithInterest(false)
       setInterestPercent('')
       setInterestAmount('')
-      setGivenAtLocal(toDateTimeLocalValue(new Date()))
+      setTakenAtLocal(toDateTimeLocalValue(new Date()))
       await loadEntries()
     } catch (err) {
       setError(err?.message || 'Could not save this entry.')
@@ -215,12 +220,12 @@ function PersonDetail() {
     return <p className="text-sm text-slate-600">Loading…</p>
   }
 
-  if (notAllowed || !person) {
+  if (notAllowed || !lender) {
     return (
       <div className="space-y-4">
-        <p className="text-sm text-slate-700">This person was not found, or you do not have access.</p>
-        <Link to="/people" className="text-sm font-medium text-teal-700 underline-offset-2 hover:underline">
-          ← Back to people
+        <p className="text-sm text-slate-700">This record was not found, or you do not have access.</p>
+        <Link to="/owed-to" className="text-sm font-medium text-amber-800 underline-offset-2 hover:underline">
+          ← Siddu to be paid
         </Link>
       </div>
     )
@@ -229,63 +234,64 @@ function PersonDetail() {
   return (
     <div className="space-y-8">
       <div>
-        <Link to="/people" className="text-sm font-medium text-teal-700 underline-offset-2 hover:underline">
-          ← All people
+        <Link to="/owed-to" className="text-sm font-medium text-amber-800 underline-offset-2 hover:underline">
+          ← Siddu to be paid
         </Link>
-        <h1 className="mt-2 text-xl font-semibold text-slate-900">{person.name}</h1>
-        <p className="text-sm text-slate-600">Mobile: {person.mobile}</p>
+        <h1 className="mt-2 text-xl font-semibold text-slate-900">{lender.name}</h1>
+        <p className="text-sm text-slate-600">Mobile: {lender.mobile}</p>
         <p className="mt-2 max-w-2xl text-sm text-slate-500">
-          Below, add each time you give money to this person. You can note interest as a percentage and as a separate amount when applicable.
+          Record each time you <strong className="font-medium text-slate-700">took money</strong> from this person.
+          When you pay them back, use <strong className="font-medium text-slate-700">Repay</strong> on each row.
         </p>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-800">Record money given</h2>
+      <section className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-800">Record money you took</h2>
         <form onSubmit={handleAddEntry} className="mt-4 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label htmlFor="given-at" className="block text-sm font-medium text-slate-700">
-                Date &amp; time money was given
+              <label htmlFor="taken-at" className="block text-sm font-medium text-slate-700">
+                Date &amp; time you took the money
               </label>
               <input
-                id="given-at"
+                id="taken-at"
                 type="datetime-local"
                 required
-                value={givenAtLocal}
-                onChange={(e) => setGivenAtLocal(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-teal-600/20 focus:border-teal-500 focus:ring-2"
+                value={takenAtLocal}
+                onChange={(e) => setTakenAtLocal(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-amber-600/20 focus:border-amber-600 focus:ring-2"
               />
             </div>
             <div>
-              <label htmlFor="amount-given" className="block text-sm font-medium text-slate-700">
-                Amount given
+              <label htmlFor="amount-taken" className="block text-sm font-medium text-slate-700">
+                Amount you took (₹)
               </label>
               <input
-                id="amount-given"
+                id="amount-taken"
                 type="number"
                 min="0"
                 step="0.01"
                 required
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-teal-600/20 focus:border-teal-500 focus:ring-2"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-amber-600/20 focus:border-amber-600 focus:ring-2"
                 placeholder="e.g. 10000"
               />
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-4">
+          <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-4">
             <label className="flex cursor-pointer items-start gap-3">
               <input
                 type="checkbox"
                 checked={withInterest}
                 onChange={(e) => setWithInterest(e.target.checked)}
-                className="mt-1 size-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+                className="mt-1 size-4 rounded border-slate-300 text-amber-700 focus:ring-amber-600"
               />
               <span>
-                <span className="block text-sm font-medium text-slate-800">This amount is with interest</span>
+                <span className="block text-sm font-medium text-slate-800">This borrowing has interest</span>
                 <span className="mt-0.5 block text-xs text-slate-500">
-                  If ticked, fill in how much % interest and the interest amount (rupees) for this giving.
+                  If ticked, enter interest % and interest amount (rupees) for this loan.
                 </span>
               </span>
             </label>
@@ -293,32 +299,32 @@ function PersonDetail() {
             {withInterest && (
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="interest-pct" className="block text-sm font-medium text-slate-700">
+                  <label htmlFor="b-interest-pct" className="block text-sm font-medium text-slate-700">
                     Interest (%)
                   </label>
                   <input
-                    id="interest-pct"
+                    id="b-interest-pct"
                     type="number"
                     min="0"
                     step="0.01"
                     value={interestPercent}
                     onChange={(e) => setInterestPercent(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-teal-600/20 focus:border-teal-500 focus:ring-2"
+                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-amber-600/20 focus:border-amber-600 focus:ring-2"
                     placeholder="e.g. 2"
                   />
                 </div>
                 <div>
-                  <label htmlFor="interest-amt" className="block text-sm font-medium text-slate-700">
+                  <label htmlFor="b-interest-amt" className="block text-sm font-medium text-slate-700">
                     Interest amount (₹)
                   </label>
                   <input
-                    id="interest-amt"
+                    id="b-interest-amt"
                     type="number"
                     min="0"
                     step="0.01"
                     value={interestAmount}
                     onChange={(e) => setInterestAmount(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-teal-600/20 focus:border-teal-500 focus:ring-2"
+                    className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none ring-amber-600/20 focus:border-amber-600 focus:ring-2"
                     placeholder="e.g. 500"
                   />
                 </div>
@@ -335,43 +341,43 @@ function PersonDetail() {
           <button
             type="submit"
             disabled={saving || !canUseForm}
-            className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-60"
+            className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800 disabled:opacity-60"
           >
-            {saving ? 'Saving…' : 'Save this giving'}
+            {saving ? 'Saving…' : 'Save this borrowing'}
           </button>
         </form>
       </section>
 
       <section>
-        <h2 className="text-sm font-semibold text-slate-800">History for this person</h2>
+        <h2 className="text-sm font-semibold text-slate-800">History — what you still owe</h2>
         {!entriesLoading && entries.length > 0 && (
-          <div className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Total balance to receive</p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">{formatMoney(totalOutstanding)}</p>
-            <p className="mt-1 text-xs text-slate-500">
-              Uses the <strong className="font-medium text-slate-700">balance</strong> value stored on each entry in
-              Firestore (updated whenever you add a row or record a payment).
+          <div className="mt-3 rounded-xl border border-amber-200/80 bg-amber-50/40 px-4 py-3 shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-600">Total still owed to this person</p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">{formatMoney(totalOwedHere)}</p>
+            <p className="mt-1 text-xs text-slate-600">
+              Uses the <strong className="font-medium text-slate-800">balance</strong> field stored on each entry in
+              Firestore.
             </p>
           </div>
         )}
         {entriesLoading ? (
-          <p className="mt-3 text-sm text-slate-500">Loading entries…</p>
+          <p className="mt-3 text-sm text-slate-500">Loading…</p>
         ) : entries.length === 0 ? (
           <p className="mt-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">
-            No entries yet. When you give money, add it using the form above.
+            No entries yet. When you take money from this person, add it using the form above.
           </p>
         ) : (
           <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
                 <tr>
-                  <th className="px-3 py-3">When given</th>
-                  <th className="px-3 py-3">Given (₹)</th>
+                  <th className="px-3 py-3">When taken</th>
+                  <th className="px-3 py-3">Taken (₹)</th>
                   <th className="hidden px-3 py-3 lg:table-cell">Interest?</th>
                   <th className="hidden px-3 py-3 md:table-cell">Int. %</th>
                   <th className="hidden px-3 py-3 md:table-cell">Int. ₹</th>
                   <th className="px-3 py-3">Total due</th>
-                  <th className="px-3 py-3">Paid</th>
+                  <th className="px-3 py-3">Repaid</th>
                   <th className="px-3 py-3">Balance</th>
                   <th className="px-3 py-3"> </th>
                 </tr>
@@ -379,7 +385,7 @@ function PersonDetail() {
               <tbody className="divide-y divide-slate-100">
                 {entries.map((row) => {
                   const totalDue = computeEntryTotalDue(row)
-                  const paid = row.totalPaid ?? 0
+                  const repaid = row.totalPaid ?? 0
                   const balanceNum = Math.max(0, Number(row.balance) || 0)
                   const settled = balanceNum <= 0.001
                   return (
@@ -394,9 +400,9 @@ function PersonDetail() {
                         {row.withInterest && row.interestAmount != null ? formatMoney(row.interestAmount) : '—'}
                       </td>
                       <td className="whitespace-nowrap px-3 py-3">{formatMoney(totalDue)}</td>
-                      <td className="whitespace-nowrap px-3 py-3">{formatMoney(paid)}</td>
+                      <td className="whitespace-nowrap px-3 py-3">{formatMoney(repaid)}</td>
                       <td className="whitespace-nowrap px-3 py-3 font-medium">
-                        <span className={settled ? 'text-emerald-700' : 'text-amber-800'}>
+                        <span className={settled ? 'text-emerald-700' : 'text-amber-900'}>
                           {formatMoney(balanceNum)}
                         </span>
                       </td>
@@ -404,10 +410,10 @@ function PersonDetail() {
                         <button
                           type="button"
                           disabled={settled}
-                          onClick={() => openPaymentModal(row)}
-                          className="rounded-lg border border-teal-600 bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-900 hover:bg-teal-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                          onClick={() => openRepayModal(row)}
+                          className="rounded-lg border border-amber-600 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-950 hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
                         >
-                          {settled ? 'Settled' : 'Paid'}
+                          {settled ? 'Settled' : 'Repay'}
                         </button>
                       </td>
                     </tr>
@@ -424,55 +430,55 @@ function PersonDetail() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
           role="presentation"
           onClick={(e) => {
-            if (e.target === e.currentTarget) cancelPaymentModal()
+            if (e.target === e.currentTarget) cancelRepayModal()
           }}
         >
           <div
             role="dialog"
             aria-modal="true"
-            aria-labelledby="payment-dialog-title"
+            aria-labelledby="repay-dialog-title"
             className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 id="payment-dialog-title" className="text-base font-semibold text-slate-900">
-              Record amount paid
+            <h3 id="repay-dialog-title" className="text-base font-semibold text-slate-900">
+              Record repayment
             </h3>
             <p className="mt-2 text-sm text-slate-600">
-              Money was given on{' '}
+              You took money on{' '}
               <span className="font-medium text-slate-800">{formatDateTime(paymentEntry.givenAt)}</span>. Remaining
-              balance for this row:{' '}
+              balance on this row:{' '}
               <span className="font-semibold text-slate-900">
                 {formatMoney(Math.max(0, Number(paymentEntry.balance) || 0))}
               </span>
             </p>
-            <form onSubmit={handleSubmitPayment} className="mt-4 space-y-4">
+            <form onSubmit={handleSubmitRepayment} className="mt-4 space-y-4">
               <div>
-                <label htmlFor="pay-amount" className="block text-sm font-medium text-slate-700">
-                  Amount received (₹)
+                <label htmlFor="repay-amount" className="block text-sm font-medium text-slate-700">
+                  Amount you repaid (₹)
                 </label>
                 <input
-                  id="pay-amount"
+                  id="repay-amount"
                   type="number"
                   min="0"
                   step="0.01"
                   required
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-teal-600/20 focus:border-teal-500 focus:ring-2"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-amber-600/20 focus:border-amber-600 focus:ring-2"
                   placeholder="e.g. 2000"
                 />
               </div>
               <div>
-                <label htmlFor="pay-when" className="block text-sm font-medium text-slate-700">
-                  When was this amount paid?
+                <label htmlFor="repay-when" className="block text-sm font-medium text-slate-700">
+                  When did you repay?
                 </label>
                 <input
-                  id="pay-when"
+                  id="repay-when"
                   type="datetime-local"
                   required
                   value={paymentPaidAtLocal}
                   onChange={(e) => setPaymentPaidAtLocal(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-teal-600/20 focus:border-teal-500 focus:ring-2"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-amber-600/20 focus:border-amber-600 focus:ring-2"
                 />
               </div>
               {paymentError && (
@@ -484,14 +490,14 @@ function PersonDetail() {
                 <button
                   type="submit"
                   disabled={paymentSaving}
-                  className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-60"
+                  className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-800 disabled:opacity-60"
                 >
-                  {paymentSaving ? 'Saving…' : 'Save payment'}
+                  {paymentSaving ? 'Saving…' : 'Save repayment'}
                 </button>
                 <button
                   type="button"
                   disabled={paymentSaving}
-                  onClick={cancelPaymentModal}
+                  onClick={cancelRepayModal}
                   className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                 >
                   Cancel
@@ -505,4 +511,4 @@ function PersonDetail() {
   )
 }
 
-export default PersonDetail
+export default BorrowedDetail

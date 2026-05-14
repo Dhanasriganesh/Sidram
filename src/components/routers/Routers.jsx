@@ -4,6 +4,8 @@ import Home from '../pages/Home'
 import Login from '../pages/Login'
 import PeopleList from '../pages/PeopleList'
 import PersonDetail from '../pages/PersonDetail'
+import BorrowedList from '../pages/BorrowedList'
+import BorrowedDetail from '../pages/BorrowedDetail'
 import MainLayout from '../layout/MainLayout'
 import ProtectedRoute from '../auth/ProtectedRoute'
 
@@ -33,6 +35,22 @@ function Routers() {
           element={
             <ProtectedRoute>
               <PersonDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/owed-to"
+          element={
+            <ProtectedRoute>
+              <BorrowedList />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/owed-to/:lenderId"
+          element={
+            <ProtectedRoute>
+              <BorrowedDetail />
             </ProtectedRoute>
           }
         />

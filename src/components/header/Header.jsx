@@ -23,6 +23,9 @@ function Header() {
               <NavLink to="/people" className={navClass}>
                 People
               </NavLink>
+              <NavLink to="/owed-to" className={navClass}>
+                Siddu to be paid
+              </NavLink>
             </nav>
           )}
         </div>

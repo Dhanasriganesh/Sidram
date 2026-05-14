@@ -14,37 +14,32 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '../firebase/config'
-import { normalizeMobileKey } from '../lib/phone'
 import { computeEntryTotalDue } from '../lib/loanMath'
-import { LEDGER_BOOTSTRAP_FLAG } from './ledgerBootstrap'
+import { normalizeMobileKey } from '../lib/phone'
 
-export function peopleCollectionRef() {
-  return collection(db, 'people')
+export function borrowedFromCollectionRef() {
+  return collection(db, 'borrowedFrom')
 }
 
-export function entriesCollectionRef(personId) {
-  return collection(db, 'people', personId, 'entries')
+export function borrowedEntriesCollectionRef(lenderId) {
+  return collection(db, 'borrowedFrom', lenderId, 'entries')
 }
 
 /**
  * @param {string} ownerUid
- * @returns {Promise<Array<{ id: string, name: string, mobile: string, createdAt: import('@firebase/firestore').Timestamp | null }>>}
  */
-export async function listPeople(ownerUid) {
-  const q = query(peopleCollectionRef(), where('ownerUid', '==', ownerUid))
+export async function listBorrowedFrom(ownerUid) {
+  const q = query(borrowedFromCollectionRef(), where('ownerUid', '==', ownerUid))
   const snap = await getDocs(q)
-  const rows = snap.docs
-    .map((d) => {
-      const data = d.data()
-      if (data[LEDGER_BOOTSTRAP_FLAG] === true) return null
-      return {
-        id: d.id,
-        name: data.name ?? '',
-        mobile: data.mobile ?? '',
-        createdAt: data.createdAt ?? null,
-      }
-    })
-    .filter(Boolean)
+  const rows = snap.docs.map((d) => {
+    const data = d.data()
+    return {
+      id: d.id,
+      name: data.name ?? '',
+      mobile: data.mobile ?? '',
+      createdAt: data.createdAt ?? null,
+    }
+  })
   rows.sort((a, b) => {
     const ta = a.createdAt?.toMillis?.() ?? 0
     const tb = b.createdAt?.toMillis?.() ?? 0
@@ -54,16 +49,15 @@ export async function listPeople(ownerUid) {
 }
 
 /**
- * @param {string} personId
+ * @param {string} lenderId
  * @param {string} ownerUid
  */
-export async function getPersonIfOwner(personId, ownerUid) {
-  const ref = doc(db, 'people', personId)
+export async function getBorrowedLenderIfOwner(lenderId, ownerUid) {
+  const ref = doc(db, 'borrowedFrom', lenderId)
   const snap = await getDoc(ref)
   if (!snap.exists()) return null
   const data = snap.data()
   if (data.ownerUid !== ownerUid) return null
-  if (data[LEDGER_BOOTSTRAP_FLAG] === true) return null
   return {
     id: snap.id,
     name: data.name ?? '',
@@ -72,29 +66,21 @@ export async function getPersonIfOwner(personId, ownerUid) {
   }
 }
 
-/**
- * @param {string} ownerUid
- * @param {string} mobile
- */
-export async function hasDuplicateMobileForOwner(ownerUid, mobile) {
+export async function hasDuplicateBorrowedMobileForOwner(ownerUid, mobile) {
   const key = normalizeMobileKey(mobile)
   if (!key) return false
-  const people = await listPeople(ownerUid)
-  return people.some((p) => normalizeMobileKey(p.mobile) === key)
+  const list = await listBorrowedFrom(ownerUid)
+  return list.some((p) => normalizeMobileKey(p.mobile) === key)
 }
 
-/**
- * @param {string} ownerUid
- * @param {{ name: string, mobile: string }} input
- */
-export async function createPerson(ownerUid, input) {
-  const duplicate = await hasDuplicateMobileForOwner(ownerUid, input.mobile)
+export async function createBorrowedLender(ownerUid, input) {
+  const duplicate = await hasDuplicateBorrowedMobileForOwner(ownerUid, input.mobile)
   if (duplicate) {
-    const err = new Error('A person with this mobile number already exists.')
+    const err = new Error('This mobile number is already used for someone you owe.')
     err.code = 'duplicate-mobile'
     throw err
   }
-  await addDoc(peopleCollectionRef(), {
+  await addDoc(borrowedFromCollectionRef(), {
     name: input.name.trim(),
     mobile: input.mobile.trim(),
     ownerUid,
@@ -102,20 +88,15 @@ export async function createPerson(ownerUid, input) {
   })
 }
 
-/**
- * Deletes all money entries for this person, then the person document.
- * @param {string} personId
- * @param {string} ownerUid
- */
-export async function deletePersonAndEntries(personId, ownerUid) {
-  const person = await getPersonIfOwner(personId, ownerUid)
-  if (!person) {
-    const err = new Error('Person not found or access denied.')
+export async function deleteBorrowedLenderAndEntries(lenderId, ownerUid) {
+  const lender = await getBorrowedLenderIfOwner(lenderId, ownerUid)
+  if (!lender) {
+    const err = new Error('Record not found or access denied.')
     err.code = 'not-found'
     throw err
   }
 
-  const entriesSnap = await getDocs(query(entriesCollectionRef(personId)))
+  const entriesSnap = await getDocs(query(borrowedEntriesCollectionRef(lenderId)))
   const entryRefs = entriesSnap.docs.map((d) => d.ref)
 
   for (let i = 0; i < entryRefs.length; i += 500) {
@@ -126,15 +107,11 @@ export async function deletePersonAndEntries(personId, ownerUid) {
     await batch.commit()
   }
 
-  await deleteDoc(doc(db, 'people', personId))
+  await deleteDoc(doc(db, 'borrowedFrom', lenderId))
 }
 
-/**
- * @param {string} personId
- * @returns {Promise<Array<{ id: string, amount: number, givenAt: import('@firebase/firestore').Timestamp, withInterest: boolean, interestPercent: number | null, interestAmount: number | null, totalPaid: number, balance: number, lastPaymentAt: import('@firebase/firestore').Timestamp | null, createdAt: import('@firebase/firestore').Timestamp | null }>>}
- */
-export async function listEntries(personId) {
-  const q = query(entriesCollectionRef(personId), orderBy('givenAt', 'desc'))
+export async function listBorrowedEntries(lenderId) {
+  const q = query(borrowedEntriesCollectionRef(lenderId), orderBy('givenAt', 'desc'))
   const snap = await getDocs(q)
   const rows = []
   let batch = writeBatch(db)
@@ -193,17 +170,7 @@ export async function listEntries(personId) {
   return rows
 }
 
-/**
- * @param {string} personId
- * @param {{
- *   amount: number,
- *   givenAt: Date,
- *   withInterest: boolean,
- *   interestPercent: number | null,
- *   interestAmount: number | null,
- * }} input
- */
-export async function createEntry(personId, input) {
+export async function createBorrowedEntry(lenderId, input) {
   const totalDue = computeEntryTotalDue({
     amount: input.amount,
     withInterest: input.withInterest,
@@ -219,31 +186,25 @@ export async function createEntry(personId, input) {
     balance: totalDue,
     createdAt: serverTimestamp(),
   }
-  await addDoc(entriesCollectionRef(personId), payload)
+  await addDoc(borrowedEntriesCollectionRef(lenderId), payload)
 }
 
-/**
- * Record a repayment against one money-given entry (updates totalPaid, balance, lastPaymentAt).
- * @param {string} personId
- * @param {string} entryId
- * @param {{ amount: number, paidAt: Date }} payment
- */
-export async function recordEntryPayment(personId, entryId, payment) {
+export async function recordBorrowedRepayment(lenderId, entryId, payment) {
   const amount = Number(payment.amount)
   if (!Number.isFinite(amount) || amount <= 0) {
-    const err = new Error('Enter a valid payment amount greater than zero.')
+    const err = new Error('Enter a valid repayment amount greater than zero.')
     err.code = 'invalid-amount'
     throw err
   }
 
   const paidAt = payment.paidAt instanceof Date ? payment.paidAt : new Date(payment.paidAt)
   if (Number.isNaN(paidAt.getTime())) {
-    const err = new Error('Invalid payment date.')
+    const err = new Error('Invalid date.')
     err.code = 'invalid-date'
     throw err
   }
 
-  const ref = doc(db, 'people', personId, 'entries', entryId)
+  const ref = doc(db, 'borrowedFrom', lenderId, 'entries', entryId)
 
   await runTransaction(db, async (t) => {
     const snap = await t.get(ref)
@@ -262,7 +223,7 @@ export async function recordEntryPayment(personId, entryId, payment) {
     const paidSoFar = typeof data.totalPaid === 'number' ? data.totalPaid : Number(data.totalPaid) || 0
     const balance = totalDue - paidSoFar
     if (balance <= 0) {
-      const err = new Error('This entry is already fully paid.')
+      const err = new Error('This entry is already fully repaid.')
       err.code = 'already-settled'
       throw err
     }
@@ -281,4 +242,19 @@ export async function recordEntryPayment(personId, entryId, payment) {
       lastPaymentAt: Timestamp.fromDate(paidAt),
     })
   })
+}
+
+/**
+ * Sum of remaining balance (what Siddu still owes) across all lenders and their entries.
+ */
+export async function getTotalBorrowedOutstanding(ownerUid) {
+  const lenders = await listBorrowedFrom(ownerUid)
+  let total = 0
+  for (const l of lenders) {
+    const entries = await listBorrowedEntries(l.id)
+    for (const e of entries) {
+      total += Math.max(0, Number(e.balance) || 0)
+    }
+  }
+  return total
 }
