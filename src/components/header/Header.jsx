@@ -13,7 +13,7 @@ function Header() {
       <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div className="flex flex-wrap items-center gap-4">
           <Link to="/" className="text-lg font-semibold tracking-tight text-slate-900">
-            Sidram <span className="text-teal-700">Khaata</span>
+             <span className="text-teal-700">SidramG 07</span>
           </Link>
           {user && (
             <nav className="flex items-center gap-1">

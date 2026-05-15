@@ -4,6 +4,7 @@ import { useAuth } from '../../context/useAuth'
 import { db, isFirebaseConfigured } from '../../firebase/config'
 import { formatDateTime, formatMoney } from '../../lib/formatDisplay'
 import { computeEntryTotalDue } from '../../lib/loanMath'
+import { downloadPersonHistoryExcel } from '../../lib/exportPersonHistory'
 import { createEntry, getPersonIfOwner, listEntries, recordEntryPayment } from '../../services/peopleApi'
 
 function toDateTimeLocalValue(date) {
@@ -343,7 +344,23 @@ function PersonDetail() {
       </section>
 
       <section>
-        <h2 className="text-sm font-semibold text-slate-800">History for this person</h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-sm font-semibold text-slate-800">History for this person</h2>
+          <button
+            type="button"
+            disabled={entriesLoading || entries.length === 0}
+            onClick={() =>
+              downloadPersonHistoryExcel({
+                personName: person.name,
+                personMobile: person.mobile,
+                entries,
+              })
+            }
+            className="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Download report
+          </button>
+        </div>
         {!entriesLoading && entries.length > 0 && (
           <div className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Total balance to receive</p>

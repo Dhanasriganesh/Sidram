@@ -282,3 +282,18 @@ export async function recordEntryPayment(personId, entryId, payment) {
     })
   })
 }
+
+/**
+ * Sum of remaining balance (what others still owe Siddu) across all people and their entries.
+ */
+export async function getTotalReceivableOutstanding(ownerUid) {
+  const people = await listPeople(ownerUid)
+  let total = 0
+  for (const p of people) {
+    const entries = await listEntries(p.id)
+    for (const e of entries) {
+      total += Math.max(0, Number(e.balance) || 0)
+    }
+  }
+  return total
+}
