@@ -63,7 +63,7 @@ function Login() {
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 px-4 py-12">
       <div className="mx-auto w-full max-w-md">
         <div className="mb-8 text-center">
-          <p className="text-xs font-semibold uppercase tracking-widest text-teal-700">Sidram</p>
+          {/* <p className="text-xs font-semibold uppercase tracking-widest text-teal-700">Sidram</p> */}
           <h1 className="mt-1 text-2xl font-semibold text-slate-900">Khaata</h1>
           <p className="mt-2 text-sm text-slate-600">Sign in with your email and password.</p>
         </div>
