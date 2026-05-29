@@ -7,6 +7,7 @@ import {
   deleteBorrowedLenderAndEntries,
   listBorrowedFrom,
 } from '../../services/borrowedApi'
+import ContactImportButton from '../ContactImportButton'
 
 function BorrowedList() {
   const { user } = useAuth()
@@ -121,6 +122,18 @@ function BorrowedList() {
       <section className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold text-slate-800">Add someone you borrowed from</h2>
         <p className="mt-1 text-xs text-slate-500">Saved in the Firestore collection “borrowedFrom”.</p>
+        <div className="mt-3">
+          <ContactImportButton
+            variant="amber"
+            disabled={saving}
+            onImport={({ name: pickedName, mobile: pickedMobile }) => {
+              setError('')
+              setName(pickedName)
+              setMobile(pickedMobile)
+            }}
+            onError={setError}
+          />
+        </div>
         <form onSubmit={handleAdd} className="mt-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
           <div className="min-w-[10rem] flex-1">
             <label htmlFor="lender-name" className="block text-sm font-medium text-slate-700">

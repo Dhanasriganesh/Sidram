@@ -149,6 +149,9 @@ export async function listBorrowedEntries(lenderId) {
       }
     }
 
+    const description =
+      typeof data.description === 'string' && data.description.trim() ? data.description.trim() : null
+
     rows.push({
       id: d.id,
       amount,
@@ -156,6 +159,7 @@ export async function listBorrowedEntries(lenderId) {
       withInterest,
       interestPercent,
       interestAmount,
+      description,
       totalPaid,
       balance,
       lastPaymentAt: data.lastPaymentAt ?? null,
@@ -176,12 +180,14 @@ export async function createBorrowedEntry(lenderId, input) {
     withInterest: input.withInterest,
     interestAmount: input.withInterest ? input.interestAmount : null,
   })
+  const desc = String(input.description ?? '').trim()
   const payload = {
     amount: input.amount,
     givenAt: Timestamp.fromDate(input.givenAt),
     withInterest: input.withInterest,
     interestPercent: input.withInterest ? input.interestPercent : null,
     interestAmount: input.withInterest ? input.interestAmount : null,
+    description: desc || null,
     totalPaid: 0,
     balance: totalDue,
     createdAt: serverTimestamp(),

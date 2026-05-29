@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/useAuth'
 import { db, isFirebaseConfigured } from '../../firebase/config'
+import ContactImportButton from '../ContactImportButton'
 import { createPerson, deletePersonAndEntries, listPeople } from '../../services/peopleApi'
 
 function PeopleList() {
@@ -122,6 +123,18 @@ function PeopleList() {
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold text-slate-800">Add a new person</h2>
         <p className="mt-1 text-xs text-slate-500">Name and mobile are saved under “people” in your database.</p>
+        <div className="mt-3">
+          <ContactImportButton
+            variant="teal"
+            disabled={saving}
+            onImport={({ name: pickedName, mobile: pickedMobile }) => {
+              setError('')
+              setName(pickedName)
+              setMobile(pickedMobile)
+            }}
+            onError={setError}
+          />
+        </div>
         <form onSubmit={handleAddPerson} className="mt-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
           <div className="min-w-[10rem] flex-1">
             <label htmlFor="person-name" className="block text-sm font-medium text-slate-700">

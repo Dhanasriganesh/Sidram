@@ -5,6 +5,7 @@ import { formatDateTime } from './formatDisplay'
 const HISTORY_HEADERS = [
   'When given',
   'Given (₹)',
+  'Description',
   'Interest?',
   'Int. %',
   'Int. ₹',
@@ -21,6 +22,7 @@ function entryToRow(row) {
   return [
     formatDateTime(row.givenAt),
     Number(row.amount) || 0,
+    row.description ?? '',
     row.withInterest ? 'Yes' : 'No',
     row.withInterest && row.interestPercent != null ? Number(row.interestPercent) : '',
     row.withInterest && row.interestAmount != null ? Number(row.interestAmount) : '',
@@ -46,13 +48,14 @@ export function downloadPersonHistoryExcel({ personName, personMobile, entries }
     HISTORY_HEADERS,
     ...dataRows,
     [],
-    ['Total balance to receive', '', '', '', '', '', '', totalBalance],
+    ['Total balance to receive', '', '', '', '', '', '', '', totalBalance],
   ]
 
   const worksheet = XLSX.utils.aoa_to_sheet(sheetData)
   worksheet['!cols'] = [
     { wch: 22 },
     { wch: 12 },
+    { wch: 28 },
     { wch: 10 },
     { wch: 8 },
     { wch: 12 },

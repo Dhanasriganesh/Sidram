@@ -4,6 +4,7 @@ import { useAuth } from '../../context/useAuth'
 import { db, isFirebaseConfigured } from '../../firebase/config'
 import { formatDateTime, formatMoney } from '../../lib/formatDisplay'
 import { computeEntryTotalDue } from '../../lib/loanMath'
+import DescriptionViewButton from '../DescriptionViewButton'
 import {
   createBorrowedEntry,
   getBorrowedLenderIfOwner,
@@ -30,6 +31,7 @@ function BorrowedDetail() {
 
   const [takenAtLocal, setTakenAtLocal] = useState(() => toDateTimeLocalValue(new Date()))
   const [amount, setAmount] = useState('')
+  const [description, setDescription] = useState('')
   const [withInterest, setWithInterest] = useState(false)
   const [interestPercent, setInterestPercent] = useState('')
   const [interestAmount, setInterestAmount] = useState('')
@@ -194,8 +196,10 @@ function BorrowedDetail() {
         withInterest,
         interestPercent: withInterest ? ip : null,
         interestAmount: withInterest ? ia : null,
+        description: description.trim() || null,
       })
       setAmount('')
+      setDescription('')
       setWithInterest(false)
       setInterestPercent('')
       setInterestAmount('')
@@ -278,6 +282,21 @@ function BorrowedDetail() {
                 placeholder="e.g. 10000"
               />
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="borrowed-description" className="block text-sm font-medium text-slate-700">
+              Description <span className="font-normal text-slate-500">(optional)</span>
+            </label>
+            <textarea
+              id="borrowed-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              maxLength={500}
+              placeholder="e.g. Emergency loan, bike repair…"
+              className="mt-1 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none ring-amber-600/20 focus:border-amber-600 focus:ring-2"
+            />
           </div>
 
           <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-4">
@@ -391,7 +410,12 @@ function BorrowedDetail() {
                   return (
                     <tr key={row.id} className="text-slate-800">
                       <td className="whitespace-nowrap px-3 py-3">{formatDateTime(row.givenAt)}</td>
-                      <td className="whitespace-nowrap px-3 py-3 font-medium">{formatMoney(row.amount)}</td>
+                      <td className="px-3 py-3">
+                        <span className="inline-flex flex-wrap items-center gap-0.5 font-medium whitespace-nowrap">
+                          {formatMoney(row.amount)}
+                          <DescriptionViewButton description={row.description} variant="amber" />
+                        </span>
+                      </td>
                       <td className="hidden px-3 py-3 lg:table-cell">{row.withInterest ? 'Yes' : 'No'}</td>
                       <td className="hidden px-3 py-3 md:table-cell">
                         {row.withInterest && row.interestPercent != null ? `${row.interestPercent}%` : '—'}

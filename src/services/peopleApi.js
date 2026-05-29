@@ -131,7 +131,7 @@ export async function deletePersonAndEntries(personId, ownerUid) {
 
 /**
  * @param {string} personId
- * @returns {Promise<Array<{ id: string, amount: number, givenAt: import('@firebase/firestore').Timestamp, withInterest: boolean, interestPercent: number | null, interestAmount: number | null, totalPaid: number, balance: number, lastPaymentAt: import('@firebase/firestore').Timestamp | null, createdAt: import('@firebase/firestore').Timestamp | null }>>}
+ * @returns {Promise<Array<{ id: string, amount: number, givenAt: import('@firebase/firestore').Timestamp, withInterest: boolean, interestPercent: number | null, interestAmount: number | null, description: string | null, totalPaid: number, balance: number, lastPaymentAt: import('@firebase/firestore').Timestamp | null, createdAt: import('@firebase/firestore').Timestamp | null }>>}
  */
 export async function listEntries(personId) {
   const q = query(entriesCollectionRef(personId), orderBy('givenAt', 'desc'))
@@ -172,6 +172,9 @@ export async function listEntries(personId) {
       }
     }
 
+    const description =
+      typeof data.description === 'string' && data.description.trim() ? data.description.trim() : null
+
     rows.push({
       id: d.id,
       amount,
@@ -179,6 +182,7 @@ export async function listEntries(personId) {
       withInterest,
       interestPercent,
       interestAmount,
+      description,
       totalPaid,
       balance,
       lastPaymentAt: data.lastPaymentAt ?? null,
@@ -201,6 +205,7 @@ export async function listEntries(personId) {
  *   withInterest: boolean,
  *   interestPercent: number | null,
  *   interestAmount: number | null,
+ *   description?: string | null,
  * }} input
  */
 export async function createEntry(personId, input) {
@@ -209,12 +214,14 @@ export async function createEntry(personId, input) {
     withInterest: input.withInterest,
     interestAmount: input.withInterest ? input.interestAmount : null,
   })
+  const desc = String(input.description ?? '').trim()
   const payload = {
     amount: input.amount,
     givenAt: Timestamp.fromDate(input.givenAt),
     withInterest: input.withInterest,
     interestPercent: input.withInterest ? input.interestPercent : null,
     interestAmount: input.withInterest ? input.interestAmount : null,
+    description: desc || null,
     totalPaid: 0,
     balance: totalDue,
     createdAt: serverTimestamp(),
