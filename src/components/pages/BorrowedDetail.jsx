@@ -229,7 +229,7 @@ function BorrowedDetail() {
       <div className="space-y-4">
         <p className="text-sm text-slate-700">This record was not found, or you do not have access.</p>
         <Link to="/owed-to" className="text-sm font-medium text-amber-800 underline-offset-2 hover:underline">
-          ← Siddu to be paid
+          ← To be paid
         </Link>
       </div>
     )
@@ -239,7 +239,7 @@ function BorrowedDetail() {
     <div className="space-y-8">
       <div>
         <Link to="/owed-to" className="text-sm font-medium text-amber-800 underline-offset-2 hover:underline">
-          ← Siddu to be paid
+          ← To be paid
         </Link>
         <h1 className="mt-2 text-xl font-semibold text-slate-900">{lender.name}</h1>
         <p className="text-sm text-slate-600">Mobile: {lender.mobile}</p>

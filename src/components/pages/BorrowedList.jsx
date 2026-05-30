@@ -112,7 +112,7 @@ function BorrowedList() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Siddu to be paid</h1>
+        <h1 className="text-xl font-semibold text-slate-900">To be paid</h1>
         <p className="mt-1 max-w-2xl text-sm text-slate-600">
           Track money <strong className="font-medium text-slate-800">you took from others</strong> (you borrowed). For
           each person, open their page to record each time you took money and when you repay them.

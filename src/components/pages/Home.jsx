@@ -51,8 +51,8 @@ function Home() {
           Signed in as <span className="font-medium text-slate-800">{user?.email}</span>
         </p>
         <p className="mt-3 max-w-2xl text-sm text-slate-600">
-          <strong className="font-medium text-slate-800">Siddu to be received</strong> — money you gave to others and
-          they still owe you. <strong className="font-medium text-slate-800">Siddu to be paid</strong> — money you took
+          <strong className="font-medium text-slate-800">To be received</strong> — money you gave to others and
+          they still owe you. <strong className="font-medium text-slate-800">To be paid</strong> — money you took
           from others and you still owe them.
         </p>
       </div>
@@ -68,13 +68,13 @@ function Home() {
           to="/owed-to"
           className="inline-flex rounded-lg bg-amber-700 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-amber-800"
         >
-          Siddu to be paid
+          To be paid
         </Link>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-xl border border-teal-200 bg-teal-50/60 p-5 shadow-sm">
-          <h2 className="text-base font-semibold text-slate-900">Siddu to be received</h2>
+          <h2 className="text-base font-semibold text-slate-900">To be received</h2>
           <p className="mt-2 max-w-2xl text-sm text-slate-700">
             Money you <strong className="font-medium text-slate-900">gave to others</strong> is stored under “people” in
             Firestore. Each person has entries: how much you gave, interest if any, what they paid back, and the
@@ -103,7 +103,7 @@ function Home() {
         </section>
 
         <section className="rounded-xl border border-amber-200 bg-amber-50/60 p-5 shadow-sm">
-          <h2 className="text-base font-semibold text-slate-900">Siddu to be paid</h2>
+          <h2 className="text-base font-semibold text-slate-900">To be paid</h2>
           <p className="mt-2 max-w-2xl text-sm text-slate-700">
             Money you <strong className="font-medium text-slate-900">borrowed from others</strong> is stored under
             “borrowedFrom” in Firestore. Each lender has entries: how much you took, interest if any, what you repaid,
@@ -124,7 +124,7 @@ function Home() {
               to="/owed-to"
               className="inline-flex text-sm font-medium text-amber-900 underline-offset-2 hover:underline"
             >
-              Open Siddu to be paid →
+              Open To be paid →
             </Link>
           </div>
         </section>
